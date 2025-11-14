@@ -1,56 +1,91 @@
 package com.example.myapplication;
 
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.Toast;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import java.util.ArrayList;
+import com.example.myapplication.db.NomeDao;
+import com.example.myapplication.model.Nome;
+import com.example.myapplication.ui.NomeAdapter;
+
+import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
-    EditText editNome;
-    Button btnSalvar;
-    RecyclerView recyclerView;
-    BancoHelper helper;
-    PessoaAdapter adapter;
-    ArrayList<Pessoa> listaPessoas;
+    private EditText edtNome;
+    private Button btnSalvar;
+    private RecyclerView rv;
+    private NomeAdapter adapter;
+    private NomeDao dao;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        editNome = findViewById(R.id.editNome);
+        dao = new NomeDao(this);
+        edtNome = findViewById(R.id.edtNome);
         btnSalvar = findViewById(R.id.btnSalvar);
-        recyclerView = findViewById(R.id.recyclerView);
+        rv = findViewById(R.id.rvNomes);
+        rv.setLayoutManager(new LinearLayoutManager(this));
 
-        helper = new BancoHelper(this);
-        recyclerView.setLayoutManager(new LinearLayoutManager(this));
-
-        carregarLista();
+        adapter = new NomeAdapter(
+                dao.listarTodos(),
+                item -> confirmarExclusao(item),
+                item -> abrirDialogEdicao(item)
+        );
+        rv.setAdapter(adapter);
 
         btnSalvar.setOnClickListener(v -> {
-            String nome = editNome.getText().toString().trim();
-            if (!nome.isEmpty()) {
-                helper.inserirPessoa(nome);
-                editNome.setText("");
-                carregarLista();
-                Toast.makeText(this, "Salvo com sucesso!", Toast.LENGTH_SHORT).show();
-            } else {
-                Toast.makeText(this, "Digite um nome!", Toast.LENGTH_SHORT).show();
+            String nome = edtNome.getText().toString().trim();
+            if (TextUtils.isEmpty(nome)) {
+                edtNome.setError("Digite um nome");
+                return;
             }
+            dao.inserir(nome);
+            edtNome.setText("");
+            recarregarLista();
         });
     }
 
-    private void carregarLista() {
-        listaPessoas = helper.listarPessoas();
-        adapter = new PessoaAdapter(listaPessoas);
-        recyclerView.setAdapter(adapter);
+    private void recarregarLista() {
+        adapter.setDados(dao.listarTodos());
+    }
+
+    private void confirmarExclusao(Nome item) {
+        new AlertDialog.Builder(this)
+                .setTitle("Excluir")
+                .setMessage("Excluir \"" + item.getNome() + "\"?")
+                .setPositiveButton("Excluir", (d, w) -> {
+                    dao.excluir(item.getId());
+                    recarregarLista();
+                })
+                .setNegativeButton("Cancelar", null)
+                .show();
+    }
+
+    private void abrirDialogEdicao(Nome item) {
+        final EditText input = new EditText(this);
+        input.setText(item.getNome());
+
+        new AlertDialog.Builder(this)
+                .setTitle("Editar nome")
+                .setView(input)
+                .setPositiveButton("Salvar", (d, w) -> {
+                    String novoNome = input.getText().toString().trim();
+                    if (!TextUtils.isEmpty(novoNome)) {
+                        item.setNome(novoNome);
+                        dao.atualizar(item);
+                        recarregarLista();
+                    }
+                })
+                .setNegativeButton("Cancelar", null)
+                .show();
     }
 }
-
